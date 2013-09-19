@@ -83,6 +83,22 @@ func todoListHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func todoDetailHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Not Implemented")
+}
+
+func staticHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, r.URL.Path[1:])
+}
+
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadFile("templates/index.html")
+	if err != nil {
+		fmt.Println("Error loading index template:", err)
+	}
+	fmt.Fprintf(w, "%s", body)
+}
+
 func main() {
 	var err error
 	connect_string := fmt.Sprintf("%s:%s", []byte(RDB_HOST), []byte(RDB_PORT))
@@ -97,6 +113,13 @@ func main() {
 		fmt.Println("Unable to set up database:", err)
 	}
 
+	// API handlers
+	http.HandleFunc("/todos/", todoDetailHandler)
 	http.HandleFunc("/todos", todoListHandler)
+
+	// Front-end handlers
+	http.HandleFunc("/static/", staticHandler)
+	http.HandleFunc("/", indexHandler)
+
 	http.ListenAndServe("0.0.0.0:8000", nil)
 }
