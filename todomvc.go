@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	rethink "github.com/christopherhesse/rethinkgo"
+	"github.com/gorilla/mux"
 	"io/ioutil"
 	"net/http"
 )
@@ -38,53 +39,55 @@ func setupDatabase() (err error) {
 }
 
 func todoListHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		var response []Todo
-		err := rethink.Table("todos").Run(session).All(&response)
-		if err != nil {
-			fmt.Println("Error fetching todos:", err)
-		}
-
-		header := w.Header()
-		header["Content-Type"] = []string{"application/json"}
-
-		responseBody, err := json.Marshal(response)
-		if err != nil {
-			fmt.Println("Error marshalling response:", err)
-		}
-
-		fmt.Fprintf(w, "%s", responseBody)
-	} else if r.Method == "POST" {
-		var todo Todo
-		var response rethink.WriteResponse
-
-		todoBody, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			fmt.Println("Error reading request body:", err)
-		}
-
-		err = json.Unmarshal(todoBody, &todo)
-		if err != nil {
-			fmt.Println("Error unmarshalling request body:", err)
-		}
-
-		err = rethink.Table(TODO_TABLE).Insert(todo).Run(session).One(&response)
-		if err != nil {
-			fmt.Println("Error inserting record:", err)
-		}
-
-		responseBody := map[string]string{}
-		responseBody["id"] = response.GeneratedKeys[0]
-		responseBodyText, err := json.Marshal(responseBody)
-		if err != nil {
-			fmt.Println("Unable to marshal response:", err)
-		}
-		fmt.Fprintf(w, "%s", responseBodyText)
+	var response []Todo
+	err := rethink.Table("todos").Run(session).All(&response)
+	if err != nil {
+		fmt.Println("Error fetching todos:", err)
 	}
+
+	header := w.Header()
+	header["Content-Type"] = []string{"application/json"}
+
+	responseBody, err := json.Marshal(response)
+	if err != nil {
+		fmt.Println("Error marshalling response:", err)
+	}
+
+	fmt.Fprintf(w, "%s", responseBody)
+}
+
+func todoCreateHandler(w http.ResponseWriter, r *http.Request) {
+	var todo Todo
+	var response rethink.WriteResponse
+
+	todoBody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println("Error reading request body:", err)
+	}
+
+	err = json.Unmarshal(todoBody, &todo)
+	if err != nil {
+		fmt.Println("Error unmarshalling request body:", err)
+	}
+
+	err = rethink.Table(TODO_TABLE).Insert(todo).Run(session).One(&response)
+	if err != nil {
+		fmt.Println("Error inserting record:", err)
+	}
+
+	responseBody := map[string]string{}
+	responseBody["id"] = response.GeneratedKeys[0]
+	responseBodyText, err := json.Marshal(responseBody)
+	if err != nil {
+		fmt.Println("Unable to marshal response:", err)
+	}
+	fmt.Fprintf(w, "%s", responseBodyText)
 }
 
 func todoDetailHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Not Implemented")
+	vars := mux.Vars(r)
+	id := vars["id"]
+	fmt.Fprintf(w, "Not Implemented:", id)
 }
 
 func staticHandler(w http.ResponseWriter, r *http.Request) {
@@ -113,13 +116,15 @@ func main() {
 		fmt.Println("Unable to set up database:", err)
 	}
 
+	r := mux.NewRouter()
 	// API handlers
-	http.HandleFunc("/todos/", todoDetailHandler)
-	http.HandleFunc("/todos", todoListHandler)
+	r.HandleFunc("/todos/{id}", todoDetailHandler)
+	r.HandleFunc("/todos", todoListHandler).Methods("GET")
+	r.HandleFunc("/todos", todoCreateHandler).Methods("POST")
 
 	// Front-end handlers
-	http.HandleFunc("/static/", staticHandler)
-	http.HandleFunc("/", indexHandler)
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
+	r.HandleFunc("/", indexHandler)
 
-	http.ListenAndServe("0.0.0.0:8000", nil)
+	http.ListenAndServe("0.0.0.0:8000", r)
 }
