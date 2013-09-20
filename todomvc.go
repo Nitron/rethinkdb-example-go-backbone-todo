@@ -25,17 +25,16 @@ type Todo struct {
 
 func getTodos() (todos []Todo, err error) {
 	err = rethink.Table(TODO_TABLE).Run(session).All(&todos)
-	if err != nil {
-		return nil, err
-	}
 	return
 }
 
 func getTodo(id string) (todo Todo, err error) {
 	err = rethink.Table(TODO_TABLE).Get(id).Run(session).One(&todo)
-	if err != nil {
-		return
-	}
+	return
+}
+
+func (todo *Todo) Update() (response rethink.WriteResponse, err error) {
+	err = rethink.Table(TODO_TABLE).Get(todo.Id).Replace(todo).Run(session).One(&response)
 	return
 }
 
@@ -125,6 +124,37 @@ func todoDetailHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s", responseBody)
 }
 
+func todoUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+	var todo Todo
+
+	todoBody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println("Error reading request body:", err)
+	}
+
+	err = json.Unmarshal(todoBody, &todo)
+	if err != nil {
+		fmt.Println("Error unmarshalling request body:", err)
+	}
+
+	response, err := todo.Update()
+	if err != nil {
+		fmt.Println("Unable to update todo %s: %s (%s)", id, err, response)
+	}
+
+	header := w.Header()
+	header["Content-Type"] = []string{"application/json"}
+
+	responseBody, err := json.Marshal(response)
+	if err != nil {
+		fmt.Println("Error marshalling response:", err)
+	}
+
+	fmt.Fprintf(w, "%s", responseBody)
+}
+
 func todoDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
@@ -179,6 +209,7 @@ func main() {
 	r := mux.NewRouter()
 	// API handlers
 	r.HandleFunc("/todos/{id}", todoDetailHandler).Methods("GET")
+	r.HandleFunc("/todos/{id}", todoUpdateHandler).Methods("PUT")
 	r.HandleFunc("/todos/{id}", todoDeleteHandler).Methods("DELETE")
 	r.HandleFunc("/todos", todoListHandler).Methods("GET")
 	r.HandleFunc("/todos", todoCreateHandler).Methods("POST")
