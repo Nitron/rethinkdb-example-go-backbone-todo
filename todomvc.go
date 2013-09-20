@@ -34,7 +34,7 @@ func getTodo(id string) (todo Todo, err error) {
 }
 
 func (todo *Todo) Update() (response rethink.WriteResponse, err error) {
-	err = rethink.Table(TODO_TABLE).Get(todo.Id).Replace(todo).Run(session).One(&response)
+	err = rethink.Table(TODO_TABLE).Get(todo.Id).Update(todo).Run(session).One(&response)
 	return
 }
 
@@ -137,6 +137,13 @@ func todoUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(todoBody, &todo)
 	if err != nil {
 		fmt.Println("Error unmarshalling request body:", err)
+	}
+
+	// Make sure that the Id of the todo matches
+	if todo.Id == "" {
+		todo.Id = id
+	} else if todo.Id != id {
+		fmt.Println("Attempted to update a todo without a matching id!")
 	}
 
 	response, err := todo.Update()
