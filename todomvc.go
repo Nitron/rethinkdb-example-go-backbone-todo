@@ -23,6 +23,22 @@ type Todo struct {
 	Done  bool   `json:"done"`
 }
 
+func getTodos() (todos []Todo, err error) {
+	err = rethink.Table("todos").Run(session).All(&todos)
+	if err != nil {
+		return nil, err
+	}
+	return
+}
+
+func getTodo(id string) (todo Todo, err error) {
+	err = rethink.Table("todos").Get(id).Run(session).One(&todo)
+	if err != nil {
+		return
+	}
+	return
+}
+
 func setupDatabase() (err error) {
 	err = rethink.DbCreate(TODO_DB).Run(session).Exec()
 	if err != nil {
@@ -39,18 +55,17 @@ func setupDatabase() (err error) {
 }
 
 func todoListHandler(w http.ResponseWriter, r *http.Request) {
-	var response []Todo
-	err := rethink.Table("todos").Run(session).All(&response)
+	todos, err := getTodos()
 	if err != nil {
-		fmt.Println("Error fetching todos:", err)
+		fmt.Println("Unable to fetch todos:", err)
 	}
 
 	header := w.Header()
 	header["Content-Type"] = []string{"application/json"}
 
-	responseBody, err := json.Marshal(response)
+	responseBody, err := json.Marshal(todos)
 	if err != nil {
-		fmt.Println("Error marshalling response:", err)
+		fmt.Println("Error marshalling todos:", err)
 	}
 
 	fmt.Fprintf(w, "%s", responseBody)
@@ -87,7 +102,21 @@ func todoCreateHandler(w http.ResponseWriter, r *http.Request) {
 func todoDetailHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
-	fmt.Fprintf(w, "Not Implemented:", id)
+	
+	todo, err := getTodo(id)
+	if err != nil {
+		fmt.Println("Unable to fetch todo %s: %s", id, err)
+	}
+
+	header := w.Header()
+	header["Content-Type"] = []string{"application/json"}
+
+	responseBody, err := json.Marshal(todo)
+	if err != nil {
+		fmt.Println("Error marshalling todo:", err)
+	}
+
+	fmt.Fprintf(w, "%s", responseBody)
 }
 
 func staticHandler(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +147,7 @@ func main() {
 
 	r := mux.NewRouter()
 	// API handlers
-	r.HandleFunc("/todos/{id}", todoDetailHandler)
+	r.HandleFunc("/todos/{id}", todoDetailHandler).Methods("GET")
 	r.HandleFunc("/todos", todoListHandler).Methods("GET")
 	r.HandleFunc("/todos", todoCreateHandler).Methods("POST")
 
