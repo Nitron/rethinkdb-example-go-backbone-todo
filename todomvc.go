@@ -24,7 +24,7 @@ type Todo struct {
 }
 
 func getTodos() (todos []Todo, err error) {
-	err = rethink.Table("todos").Run(session).All(&todos)
+	err = rethink.Table(TODO_TABLE).Run(session).All(&todos)
 	if err != nil {
 		return nil, err
 	}
@@ -32,11 +32,17 @@ func getTodos() (todos []Todo, err error) {
 }
 
 func getTodo(id string) (todo Todo, err error) {
-	err = rethink.Table("todos").Get(id).Run(session).One(&todo)
+	err = rethink.Table(TODO_TABLE).Get(id).Run(session).One(&todo)
 	if err != nil {
 		return
 	}
 	return
+}
+
+func (todo *Todo) Delete() (rethink.WriteResponse, error) {
+	var response rethink.WriteResponse
+	err := rethink.Table(TODO_TABLE).Get(todo.Id).Delete().Run(session).One(&response)
+	return response, err
 }
 
 func setupDatabase() (err error) {
@@ -119,6 +125,31 @@ func todoDetailHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s", responseBody)
 }
 
+func todoDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	todo, err := getTodo(id)
+	if err != nil {
+		fmt.Println("Unable to fetch todo %s: %s", id, err)
+	}
+
+	response, err := todo.Delete()
+	if err != nil {
+		fmt.Println("Unable to delete todo %s: %s (%s)", id, err, response)
+	}
+
+	header := w.Header()
+	header["Content-Type"] = []string{"application/json"}
+
+	responseBody, err := json.Marshal(response)
+	if err != nil {
+		fmt.Println("Error marshalling response:", err)
+	}
+
+	fmt.Fprintf(w, "%s", responseBody)
+}
+
 func staticHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, r.URL.Path[1:])
 }
@@ -148,6 +179,7 @@ func main() {
 	r := mux.NewRouter()
 	// API handlers
 	r.HandleFunc("/todos/{id}", todoDetailHandler).Methods("GET")
+	r.HandleFunc("/todos/{id}", todoDeleteHandler).Methods("DELETE")
 	r.HandleFunc("/todos", todoListHandler).Methods("GET")
 	r.HandleFunc("/todos", todoCreateHandler).Methods("POST")
 
